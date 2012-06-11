@@ -14,6 +14,10 @@ class RpcException(Exception):
     """
     code = 100
 
+    def __init__(self, message, api_call_id=''):
+        super(RpcException, self).__init__(message)
+        self.api_call_id = api_call_id
+
 class BadDataException(RpcException):
     """
     Something is wrong with data - missing, not a JSON, not a dict

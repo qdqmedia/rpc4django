@@ -111,7 +111,7 @@ setup(
                    
     ],
 
-    install_requires=['Django >=1.0'],
+    install_requires=['Django >=1.2'],
     
     # templates packaged into eggs cannot be loaded unless TEMPLATE_LOADER
     # django.template.loaders.eggs.load_template_source
@@ -119,6 +119,6 @@ setup(
     # By setting zip_safe=False, setuptools will unpack the egg
     zip_safe = False,
 
-    tests_require=['Django >=1.0', 'docutils >=0.4'],
+    tests_require=['Django >=1.2', 'docutils >=0.4'],
     test_suite='tests',
 )

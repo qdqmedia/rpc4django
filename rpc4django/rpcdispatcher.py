@@ -57,6 +57,9 @@ def rpcmethod(**kwargs):
         method.login_required = False
         method.external_name = getattr(method, '__name__')
 
+        method.authentication = kwargs.get('authentication', None)
+        method.authorization = kwargs.get('authorization', None)
+
         if 'name' in kwargs:
             method.external_name = kwargs['name']
 
@@ -103,6 +106,9 @@ class RPCMethod:
         self.permission = None
         self.login_required = False
         self.args = []
+
+        self.authentication = method.authentication
+        self.authorization = method.authorization
 
         # set the method name based on @rpcmethod or the passed value
         # default to the actual method name
@@ -243,6 +249,37 @@ class RPCDispatcher:
 
         self.register_rpcmethods(apps)
 
+
+    def check_request_permission(self, request):
+        '''
+        Checks whether this user has permission to call a particular method
+        This method does not check method call validity. That is done later
+
+        **Parameters**
+
+        - ``request`` - a django HttpRequest object
+        - ``request_format`` - the request type: 'json' or 'xml'
+
+        Returns ``False`` if permission is denied and ``True`` otherwise
+        '''
+        methods = self.list_methods()
+        method_name = self.get_method_name(request.raw_post_data) # TODO: put it to json dispatcher
+
+        for method in methods:
+            if method.name != method_name:
+                continue
+
+            if method.authentication:
+                method.authentication(request)
+
+            if method.authorization:
+                method.authorization(request)
+
+            return True
+
+        # TODO raise wrong method
+
+
     @rpcmethod(name='system.describe', signature=['struct'])
     def system_describe(self, **kwargs):
         '''
@@ -373,30 +410,20 @@ class RPCDispatcher:
 
         return self.xmlrpcdispatcher.dispatch(raw_post_data, **kwargs)
 
-    def get_method_name(self, raw_post_data, request_format='xml'):
+    def get_method_name(self, raw_post_data):
         '''
         Gets the name of the method to be called given the post data
         and the format of the data
         '''
-
-        if request_format == 'xml':
-            # xmlrpclib.loads could throw an exception, but this is fine
-            # since _marshaled_dispatch would throw the same thing
-            try:
-                params, method = xmlrpclib.loads(raw_post_data)
-                return method
-            except Exception:
+        try:
+            # attempt to do a json decode on the data
+            jsondict = json.loads(raw_post_data)
+            if not isinstance(jsondict, dict) or 'method' not in jsondict:
                 return None
-        else:
-            try:
-                # attempt to do a json decode on the data
-                jsondict = json.loads(raw_post_data)
-                if not isinstance(jsondict, dict) or 'method' not in jsondict:
-                    return None
-                else:
-                    return jsondict['method']
-            except ValueError:
-                return None
+            else:
+                return jsondict['method']
+        except ValueError:
+            return None
 
     def list_methods(self):
         '''
