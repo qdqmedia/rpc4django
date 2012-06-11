@@ -5,6 +5,7 @@ see http://json-rpc.org/wiki/specification
 '''
 
 from types import StringTypes
+from .exceptions import RpcException, UnknownProcessingError, BadDataException, BadMethodException
 
 # attempt to import json from 3 sources:
 # 1. try to import it from django
@@ -23,16 +24,7 @@ except ImportError:
 # This is consistent with SimpleXMLRPCServer output
 JSON_INDENT = 0
 
-# These error codes may be defined by the json-rpc spec at a later date
-# see http://json-rpc.org/wd/JSON-RPC-1-1-WD-20060807.html#ErrorObject
-JSONRPC_SERVER_ERROR = 100
-JSONRPC_PARSE_ERROR = 101
-JSONRPC_BAD_CALL_ERROR = 102
-JSONRPC_SEQUENCE_ERROR = 103
-JSONRPC_SERVICE_ERROR = 104
-JSONRPC_PROCEDURE_NOT_FOUND_ERROR = 105
-    
-    
+
 class JSONRPCDispatcher:
     '''
     This class can be used encode and decode jsonrpc messages, dispatch
@@ -51,96 +43,92 @@ class JSONRPCDispatcher:
         This method can be called later via the dispatch method.
         '''
         self.methods[external_name] = method
-    
-    def _encode_result(self, jsonid, result, error):
-        res = {'id': jsonid}
-        
-        if error is None:
-            res['error'] = None
-            res['result'] = result
-        else:
-            res['error'] = error
-            res['error']['name'] = 'JSONRPCError'
-            res['result'] = None
+
+
+    def _encode_result(self, api_call_id, result=None, error=None):
+        assert isinstance(error, RpcException)
+        assert not (result and error)
+        if error:
+            error = {
+                'name': 'JSONRPCError',
+                'exception': error.__class__.__name__,
+                'code': error.code,
+                'message': error.message
+            }
+        result = {
+            'id': api_call_id,
+            'result': result,
+            'error': error
+        }
         try:
-            return json.dumps(res, indent=JSON_INDENT, cls=self.json_encoder)
+            return json.dumps(result, indent=JSON_INDENT, cls=self.json_encoder)
         except:
-            err = {'message': 'failed to encode return value',
-                   'code': JSONRPC_SERVICE_ERROR,
-                   'name': 'JSONRPCError'}
-                
-            res['result'] = None
-            res['error'] = err
-            return json.dumps(res, indent=JSON_INDENT, cls=self.json_encoder)
-    
+            error = {
+                'message': 'Failed to encode return value',
+                'code': 100,
+                'name': 'JSONRPCError',
+                'exception': 'RpcException'
+            }
+            result = {
+                'id': api_call_id,
+                'result': None,
+                'error': error
+            }
+            return json.dumps(result, indent=JSON_INDENT, cls=self.json_encoder)
+
+
     def dispatch(self, json_data, **kwargs):
         '''
-        Verifies that the passed json encoded string 
+        Verifies that the passed json encoded string
         is in the correct form according to the json-rpc spec
         and calls the appropriate Python method
-        
+
         **Checks**
-        
+
          1. that the string encodes into a javascript Object (dictionary)
          2. that 'method' and 'params' are present
          3. 'method' must be a javascript String type
          4. 'params' must be a javascript Array type
-         
+
         Returns the JSON encoded response
         '''
-        if not json_data:
-            return self._encode_result('', None,
-                    {'message': 'No POST data',
-                     'code': JSONRPC_PARSE_ERROR})
-        
+        api_call_id = ''
         try:
-            # attempt to do a json decode on the data
-            jsondict = json.loads(json_data)
-        except ValueError:
-            return self._encode_result('', None, 
-                    {'message': 'JSON decoding error', 
-                     'code': JSONRPC_PARSE_ERROR})
-        
-        if not isinstance(jsondict, dict):
-            # verify the json data was a javascript Object which gets decoded
-            # into a python dictionary
-            return self._encode_result('', None, 
-                    {'message': 'Cannot decode to a javascript Object', 
-                     'code': JSONRPC_BAD_CALL_ERROR})
-        
-        if not 'method' in jsondict or not 'params' in jsondict:
-            # verify the dictionary contains the correct keys
-            # for a proper jsonrpc call
-            return self._encode_result(jsondict.get('id', ''), None, 
-                    {'message': "JSONRPC requests must have the "+ \
-                     "attributes 'method' and 'params'", 
-                     'code': JSONRPC_BAD_CALL_ERROR})
-        
-        if not isinstance(jsondict['method'], StringTypes):
-            return self._encode_result(jsondict.get('id', ''), None, 
-                    {'message': 'method must be a javascript String', 
-                     'code': JSONRPC_BAD_CALL_ERROR})
-        
-        if not isinstance(jsondict['params'], list):
-            return self._encode_result(jsondict.get('id', ''), None, 
-                    {'message': 'params must be a javascript Array', 
-                     'code': JSONRPC_BAD_CALL_ERROR})
 
-        if jsondict['method'] in self.methods:
+            if not json_data:
+                raise BadDataException('No POST data')
+
             try:
-                result = self.methods[jsondict.get('method')](*jsondict.get('params'), **kwargs)
-            except Exception, e:
-                # this catches any error from the called method raising
-                # an exception to the wrong number of params being sent
-                # to the method.
-                return self._encode_result(jsondict.get('id', ''), None, 
-                            {'message': repr(e), 
-                             'code': JSONRPC_SERVICE_ERROR})
-            return self._encode_result(jsondict.get('id', ''), result, None)
-        else:
-            return self._encode_result(jsondict.get('id', ''), None, 
-                    {'message': 'method "' + jsondict['method'] + \
-                     '" is not supported',  
-                     'code': JSONRPC_PROCEDURE_NOT_FOUND_ERROR})
+                # attempt to do a json decode on the data
+                jsondict = json.loads(json_data)
+            except ValueError:
+                raise BadDataException('JSON decoding error')
 
-    
+            if not isinstance(jsondict, dict):
+                # verify the json data was a javascript Object which gets decoded
+                # into a python dictionary
+                raise BadDataException('JSON does not contain dict as its root object')
+
+            api_call_id = jsondict.get('id', '')
+
+            if not 'method' in jsondict or not 'params' in jsondict:
+                # verify the dictionary contains the correct keys
+                # for a proper jsonrpc call
+                raise BadDataException('JSON must contain attributes method and params')
+
+            if not isinstance(jsondict['method'], StringTypes):
+                raise BadMethodException('JSON Wrong parameter method')
+
+            if not isinstance(jsondict['params'], list):
+                raise BadMethodException('JSON method params has to be Array')
+
+            if jsondict['method'] not in self.methods:
+                raise BadMethodException('Called method %s does not exist in this api, see system.listMethods' % jsondict['method'])
+
+            result = self.methods[jsondict.get('method')](*jsondict.get('params'), **kwargs)
+            return self._encode_result(api_call_id, result=result)
+
+        except RpcException as e:
+            return self._encode_result(api_call_id, error=e)
+        except Exception as e:
+            return self._encode_result(api_call_id, error=UnknownProcessingError('%s: %s' % (e.__class__.__name__, e.message)))
