@@ -33,8 +33,10 @@ class XMLRPCDispatcher(SimpleXMLRPCDispatcher):
         method has a different name due to the different parameters it takes
         from the superclass method.
         """
-        
         try:
+            if not data:
+                raise Exception('No POST data')
+
             params, method = xmlrpclib.loads(data)
             response = self._dispatch(method, params, **kwargs)
 

@@ -88,6 +88,10 @@ class JSONRPCDispatcher:
          
         Returns the JSON encoded response
         '''
+        if not json_data:
+            return self._encode_result('', None,
+                    {'message': 'No POST data',
+                     'code': JSONRPC_PARSE_ERROR})
         
         try:
             # attempt to do a json decode on the data

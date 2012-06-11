@@ -154,7 +154,7 @@ def serve_rpc_request(request):
         the Django HttpRequest object
 
     '''
-    if request.method == "POST" and len(request.POST) > 0:
+    if request.method == "POST":
         # Handle POST request with RPC payload
 
         if LOG_REQUESTS_RESPONSES:
