@@ -17,7 +17,6 @@ class JSONRPCDispatcher:
 
     # indent the json output by this many characters
     # 0 does newlines only and None does most compact
-    # This is consistent with SimpleXMLRPCServer output
     JSON_INDENT = 4
     
     def __init__(self, json_encoder=None):
@@ -102,20 +101,15 @@ class JSONRPCDispatcher:
 
         api_call_id = jsondict.get('id', '')
 
-        if not 'method' in jsondict or not 'params' in jsondict:
-            # verify the dictionary contains the correct keys
-            # for a proper jsonrpc call
-            raise BadDataException('JSON must contain attributes method and params', api_call_id=api_call_id)
+        params = jsondict.get('params', [])
+        if not isinstance(params, list):
+            raise BadDataException('JSON method params has to be a list', api_call_id=api_call_id)
 
-        if not isinstance(jsondict['method'], StringTypes):
+        try:
+            method = self.methods[jsondict.get('method')]
+        except:
             raise BadMethodException('JSON Wrong parameter method', api_call_id=api_call_id)
 
-        if not isinstance(jsondict['params'], list):
-            raise BadMethodException('JSON method params has to be Array', api_call_id=api_call_id)
-
-        if jsondict['method'] not in self.methods:
-            raise BadMethodException('Called method %s does not exist in this api, see system.listMethods' % jsondict['method'], api_call_id=api_call_id)
-
-        result = self.methods[jsondict.get('method')](*jsondict.get('params'), **kwargs)
+        result = method(*params, **kwargs)
         return self._encode_result(api_call_id, result=result)
 

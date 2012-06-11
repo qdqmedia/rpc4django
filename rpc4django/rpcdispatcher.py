@@ -1,19 +1,16 @@
 '''
-This module contains the classes necessary to handle both
+This module contains the classes necessary to handle
 `JSONRPC <http://json-rpc.org/>`_ and
-`XMLRPC <http://www.xmlrpc.com/>`_ requests.
 It also contains a decorator to mark methods as rpc methods.
 '''
 
 import inspect
 import platform
 import pydoc
+from rpc4django.exceptions import BadMethodException
 import types
-import xmlrpclib
-from xmlrpclib import Fault
 from django.contrib.auth import authenticate, login, logout
 from jsonrpcdispatcher import JSONRPCDispatcher, json
-from xmlrpcdispatcher import XMLRPCDispatcher
 
 # this error code is taken from xmlrpc-epi
 # http://xmlrpc-epi.sourceforge.net/specs/rfc.fault_codes.php
@@ -203,9 +200,7 @@ class RPCMethod:
 class RPCDispatcher:
     '''
     Keeps track of the methods available to be called and then
-    dispatches method calls to either the
-    :class:`XMLRPCDispatcher <rpc4django.xmlrpcdispatcher.XMLRPCDispatcher>`
-    or the
+    dispatches method calls to
     :class:`JSONRPCDispatcher <rpc4django.jsonrpcdispatcher.JSONRPCDispatcher>`
 
     Disables RPC introspection methods (eg. ``system.list_methods()`` if
@@ -220,9 +215,6 @@ class RPCDispatcher:
     ``rpcmethods``
       A list of :class:`RPCMethod<rpc4django.rpcdispatcher.RPCMethod>` instances
       available to be called by the dispatcher
-    ``xmlrpcdispatcher``
-      An instance of :class:`XMLRPCDispatcher <rpc4django.xmlrpcdispatcher.XMLRPCDispatcher>`
-      where XMLRPC calls are dispatched to using :meth:`xmldispatch`
     ``jsonrpcdispatcher``
       An instance of :class:`JSONRPCDispatcher <rpc4django.jsonrpcdispatcher.JSONRPCDispatcher>`
       where JSONRPC calls are dispatched to using :meth:`jsondispatch`
@@ -235,7 +227,6 @@ class RPCDispatcher:
         self.url = url
         self.rpcmethods = []        # a list of RPCMethod objects
         self.jsonrpcdispatcher = JSONRPCDispatcher(json_encoder)
-        self.xmlrpcdispatcher = XMLRPCDispatcher()
 
         if not restrict_introspection:
             self.register_method(self.system_listmethods)
@@ -258,7 +249,6 @@ class RPCDispatcher:
         **Parameters**
 
         - ``request`` - a django HttpRequest object
-        - ``request_format`` - the request type: 'json' or 'xml'
 
         Returns ``False`` if permission is denied and ``True`` otherwise
         '''
@@ -287,7 +277,7 @@ class RPCDispatcher:
         '''
 
         description = {}
-        description['serviceType'] = 'RPC4Django JSONRPC+XMLRPC'
+        description['serviceType'] = 'RPC4Django JSONRPC'
         description['serviceURL'] = self.url,
         description['methods'] = [{'name': method.name,
                                    'summary': method.help,
@@ -317,11 +307,7 @@ class RPCDispatcher:
             if method.name == method_name:
                 return method.help
 
-        # this differs from what implementation in SimpleXMLRPCServer does
-        # this will report via a fault or error while SimpleXMLRPCServer
-        # just returns an empty string
-        raise Fault(APPLICATION_ERROR, 'No method found with name: ' + \
-                    str(method_name))
+        raise BadMethodException('Method %s not registered here' % method_name)
 
     @rpcmethod(name='system.methodSignature', signature=['array', 'string'])
     def system_methodsignature(self, method_name, **kwargs):
@@ -332,8 +318,8 @@ class RPCDispatcher:
         for method in self.rpcmethods:
             if method.name == method_name:
                 return method.signature
-        raise Fault(APPLICATION_ERROR, 'No method found with name: ' + \
-                    str(method_name))
+
+        raise BadMethodException('Method %s not registered here' % method_name)
 
     @rpcmethod(name='system.login', signature=['boolean', 'string', 'string'])
     def system_login(self, username, password, **kwargs):
@@ -381,8 +367,6 @@ class RPCDispatcher:
 
             for obj in dir(app):
                 method = getattr(app, obj)
-                if isinstance(method, xmlrpclib.ServerProxy):
-                    continue
                 if callable(method) and \
                    hasattr(method, 'is_rpcmethod') and \
                    method.is_rpcmethod == True:
@@ -394,21 +378,6 @@ class RPCDispatcher:
                     # scan the module for methods with @rpcmethod
                     self.register_rpcmethods(["%s.%s" % (appname, obj)])
 
-
-
-    def jsondispatch(self, raw_post_data, **kwargs):
-        '''
-        Sends the post data to :meth:`rpc4django.jsonrpcdispatcher.JSONRPCDispatcher.dispatch`
-        '''
-
-        return self.jsonrpcdispatcher.dispatch(raw_post_data, **kwargs)
-
-    def xmldispatch(self, raw_post_data, **kwargs):
-        '''
-        Sends the post data to :meth:`rpc4django.xmlrpcdispatcher.XMLRPCDispatcher.dispatch`
-        '''
-
-        return self.xmlrpcdispatcher.dispatch(raw_post_data, **kwargs)
 
     def get_method_name(self, raw_post_data):
         '''
@@ -456,7 +425,6 @@ class RPCDispatcher:
         meth = RPCMethod(method, name, signature, helpmsg)
 
         if meth.name not in self.system_listmethods():
-            self.xmlrpcdispatcher.register_function(method, meth.name)
             self.jsonrpcdispatcher.register_function(method, meth.name)
             self.rpcmethods.append(meth)
 
