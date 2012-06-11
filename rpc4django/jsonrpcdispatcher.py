@@ -3,7 +3,8 @@ This module implements a JSON 1.0 compatible dispatcher
 
 see http://json-rpc.org/wiki/specification
 '''
-
+from django.conf import settings
+import traceback
 from types import StringTypes
 from .exceptions import RpcException, UnknownProcessingError, BadDataException, BadMethodException
 
@@ -19,11 +20,6 @@ except ImportError:
     except ImportError:
         import json
 
-# indent the json output by this many characters
-# 0 does newlines only and None does most compact
-# This is consistent with SimpleXMLRPCServer output
-JSON_INDENT = 0
-
 
 class JSONRPCDispatcher:
     '''
@@ -31,6 +27,11 @@ class JSONRPCDispatcher:
     the requested method with the passed parameters, and return any response
     or error.
     '''
+
+    # indent the json output by this many characters
+    # 0 does newlines only and None does most compact
+    # This is consistent with SimpleXMLRPCServer output
+    JSON_INDENT = 4
     
     def __init__(self, json_encoder=None):
         self.json_encoder = json_encoder
@@ -46,7 +47,7 @@ class JSONRPCDispatcher:
 
 
     def _encode_result(self, api_call_id, result=None, error=None):
-        assert isinstance(error, RpcException)
+        assert error is None or isinstance(error, RpcException)
         assert not (result and error)
         if error:
             error = {
@@ -61,7 +62,7 @@ class JSONRPCDispatcher:
             'error': error
         }
         try:
-            return json.dumps(result, indent=JSON_INDENT, cls=self.json_encoder)
+            return json.dumps(result, indent=self.JSON_INDENT, cls=self.json_encoder)
         except:
             error = {
                 'message': 'Failed to encode return value',
@@ -74,7 +75,7 @@ class JSONRPCDispatcher:
                 'result': None,
                 'error': error
             }
-            return json.dumps(result, indent=JSON_INDENT, cls=self.json_encoder)
+            return json.dumps(result, indent=self.JSON_INDENT, cls=self.json_encoder)
 
 
     def dispatch(self, json_data, **kwargs):
@@ -129,6 +130,9 @@ class JSONRPCDispatcher:
             return self._encode_result(api_call_id, result=result)
 
         except RpcException as e:
+            if settings.DEBUG:
+                traceback.print_exc()
             return self._encode_result(api_call_id, error=e)
         except Exception as e:
+            traceback.print_exc()
             return self._encode_result(api_call_id, error=UnknownProcessingError('%s: %s' % (e.__class__.__name__, e.message)))
