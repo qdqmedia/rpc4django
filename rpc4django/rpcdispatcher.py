@@ -244,7 +244,7 @@ class RPCDispatcher:
         self.register_rpcmethods(apps)
 
     @rpcmethod(name='system.describe', signature=['struct'])
-    def system_describe(self):
+    def system_describe(self, **kwargs):
         '''
         Returns a simple method description of the methods supported
         '''
@@ -261,7 +261,7 @@ class RPCDispatcher:
         return description
 
     @rpcmethod(name='system.listMethods', signature=['array'])
-    def system_listmethods(self):
+    def system_listmethods(self, **kwargs):
         '''
         Returns a list of supported methods
         '''
@@ -271,7 +271,7 @@ class RPCDispatcher:
         return methods
 
     @rpcmethod(name='system.methodHelp', signature=['string', 'string'])
-    def system_methodhelp(self, method_name):
+    def system_methodhelp(self, method_name, **kwargs):
         '''
         Returns documentation for a specified method
         '''
@@ -287,7 +287,7 @@ class RPCDispatcher:
                     str(method_name))
 
     @rpcmethod(name='system.methodSignature', signature=['array', 'string'])
-    def system_methodsignature(self, method_name):
+    def system_methodsignature(self, method_name, **kwargs):
         '''
         Returns the signature for a specified method
         '''

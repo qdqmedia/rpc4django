@@ -154,7 +154,6 @@ def serve_rpc_request(request):
         the Django HttpRequest object
 
     '''
-
     if request.method == "POST" and len(request.POST) > 0:
         # Handle POST request with RPC payload
 
@@ -168,7 +167,7 @@ def serve_rpc_request(request):
             if not check_request_permission(request, 'xml'):
                 return HttpResponseForbidden()
 
-            resp = dispatcher.xmldispatch(request.raw_post_data, \
+            resp = dispatcher.xmldispatch(request.raw_post_data,
                                           request=request)
             response_type = 'text/xml'
         else:
@@ -178,7 +177,7 @@ def serve_rpc_request(request):
             if not check_request_permission(request, 'json'):
                 return HttpResponseForbidden()
 
-            resp = dispatcher.jsondispatch(request.raw_post_data, \
+            resp = dispatcher.jsondispatch(request.raw_post_data,
                                            request=request)
             response_type = 'application/json'
 
@@ -225,7 +224,7 @@ def serve_rpc_request(request):
             # restricts the ability to test the rpc server from the docs
             'restrict_rpctest': RESTRICT_RPCTEST,
         }
-        return render_to_response('rpc4django/rpcmethod_summary.html', \
+        return render_to_response('rpc4django/rpcmethod_summary.html',
                                   template_data)
 
 # exclude from the CSRF framework because RPC is intended to be used cross site

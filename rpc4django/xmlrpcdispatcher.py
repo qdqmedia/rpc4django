@@ -36,13 +36,8 @@ class XMLRPCDispatcher(SimpleXMLRPCDispatcher):
         
         try:
             params, method = xmlrpclib.loads(data)
-            
-            try:
-                response = self._dispatch(method, params, **kwargs)
-            except TypeError:
-                # Catch unexpected keyword argument error
-                response = self._dispatch(method, params)
-            
+            response = self._dispatch(method, params, **kwargs)
+
             # wrap response in a singleton tuple
             response = (response,)
             response = xmlrpclib.dumps(response, methodresponse=1,

@@ -121,17 +121,10 @@ class JSONRPCDispatcher:
             return self._encode_result(jsondict.get('id', ''), None, 
                     {'message': 'params must be a javascript Array', 
                      'code': JSONRPC_BAD_CALL_ERROR})
-        
-        
+
         if jsondict['method'] in self.methods:
             try:
-                try:
-                    result = self.methods[jsondict.get('method')] \
-                                    (*jsondict.get('params'), **kwargs)
-                except TypeError:
-                    # Catch unexpected keyword argument error
-                    result = self.methods[jsondict.get('method')] \
-                                         (*jsondict.get('params'))
+                result = self.methods[jsondict.get('method')](*jsondict.get('params'), **kwargs)
             except Exception, e:
                 # this catches any error from the called method raising
                 # an exception to the wrong number of params being sent
