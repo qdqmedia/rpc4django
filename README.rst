@@ -1,5 +1,11 @@
 RPC4Django
 ==========
+
+WARNING
+-------
+
+This docs can be outdated since I haven't done yet any revision after latest changes.
+
    
 Prerequisites
 -------------
